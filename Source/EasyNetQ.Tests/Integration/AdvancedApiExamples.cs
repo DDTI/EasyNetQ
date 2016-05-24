@@ -85,7 +85,7 @@ namespace EasyNetQ.Tests.Integration
         [Test, Explicit]
         public void ConsumeFromAQueue()
         {
-            var queue = new Queue("my_queue", false);
+            var queue = new Queue("my_queue", false,false,false,false);
             advancedBus.Consume(queue, (body, properties, info) => Task.Factory.StartNew(() =>
                 {
                     var message = Encoding.UTF8.GetString(body);

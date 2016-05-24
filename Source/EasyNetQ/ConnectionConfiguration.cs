@@ -28,12 +28,16 @@ namespace EasyNetQ
         /// Operation timeout seconds. (default is 10)
         /// </summary>
         public ushort Timeout { get; set; }
+		/// <summary>
+		/// Option to include the time spent in the in-memory queue when calculating the message timeout.
+		/// </summary>
+		public bool IncludeQueTimeInTimeout { get; set; }
         public bool PublisherConfirms { get; set; }
         public bool PersistentMessages { get; set; }
         public bool CancelOnHaFailover { get; set; }
         public string Product { get; set; }
         public string Platform { get; set; }
-
+        public string ApplicationVersion { get; set; }
         public ConnectionConfiguration()
         {
             // set default values
@@ -60,7 +64,8 @@ namespace EasyNetQ
 
         private void SetDefaultClientProperties(IDictionary<string, object> clientProperties)
         {
-            var version = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            var version = ApplicationVersion ?? Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            var easyNetQVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
             var applicationNameAndPath = Environment.GetCommandLineArgs()[0];
 
             var applicationName = "unknown";
@@ -89,7 +94,7 @@ namespace EasyNetQ
             clientProperties.Add("product", product);
             clientProperties.Add("platform", platform);
             clientProperties.Add("version", version);
-            clientProperties.Add("easynetq_version", version);
+            clientProperties.Add("easynetq_version", easyNetQVersion);
             clientProperties.Add("application", applicationName);
             clientProperties.Add("application_location", applicationPath);
             clientProperties.Add("machine_name", hostname);
@@ -97,6 +102,7 @@ namespace EasyNetQ
             clientProperties.Add("connected", DateTime.UtcNow.ToString("u")); // UniversalSortableDateTimePattern: yyyy'-'MM'-'dd HH':'mm':'ss'Z'
             clientProperties.Add("requested_heartbeat", RequestedHeartbeat.ToString());
             clientProperties.Add("timeout", Timeout.ToString());
+			clientProperties.Add("includeQueTimeInTimeout", IncludeQueTimeInTimeout.ToString());
             clientProperties.Add("publisher_confirms", PublisherConfirms.ToString());
             clientProperties.Add("persistent_messages", PersistentMessages.ToString());
         }

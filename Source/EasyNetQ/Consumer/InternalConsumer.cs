@@ -87,6 +87,10 @@ namespace EasyNetQ.Consumer
 
                 Model.BasicQos(0, configuration.PrefetchCount, false);
 
+                // if configured, re-establish the consumer on a ConsumerCancelled event.
+                if (this.queue.IsConsumerRepairable)
+                    this.ConsumerCancelled += (sender, args) => ConsumerReConnect(sender, consumerTag, configuration.IsExclusive, arguments);
+                   
                 Model.BasicConsume(
                     queue.Name,         // queue
                     false,              // noAck
@@ -184,6 +188,33 @@ namespace EasyNetQ.Consumer
                 });
         }
 
+        private void ConsumerReConnect(object sender,string consumerTag,bool isExclusive,IDictionary<string,object> arguments)
+        {
+            InternalConsumer consumer = (InternalConsumer)sender;
+            if (consumer.Model.IsOpen)
+            {
+
+                logger.InfoWrite("Consumer canceled on queue: '{0}'", consumer.queue.Name);
+                consumer.Model.QueueDeclare(consumer.queue.Name, consumer.queue.IsDurable, consumer.queue.IsExclusive, consumer.queue.IsAutoDelete
+                    , new Dictionary<string, object>());
+
+                logger.InfoWrite("Created queue: '{0}'", consumer.queue.Name);
+                if (!string.IsNullOrWhiteSpace(consumer.queue.BoundExchange))
+                {
+                    consumer.Model.QueueBind(consumer.queue.Name, consumer.queue.BoundExchange, "#");
+                    logger.InfoWrite("Bound queue: '{0}' to exchange: '{1}'", consumer.queue.Name, consumer.queue.BoundExchange);
+                }
+
+                consumer.Model.BasicConsume(
+                               consumer.queue.Name,         // queue
+                               false,              // noAck
+                               consumerTag,        // consumerTag
+                               true,
+                               isExclusive,
+                               arguments,          // arguments
+                               consumer);              // consumer
+            }
+        }
         private bool disposed;
 
         public void Dispose()

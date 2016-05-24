@@ -18,6 +18,7 @@ namespace EasyNetQ
         /// </summary>
         void Initialize();
         IModel CreateModel();
+		IConnection Connection { get; }
     }
 
     /// <summary>
@@ -33,6 +34,10 @@ namespace EasyNetQ
         private readonly object locker = new object();
         private bool initialized = false;
         private IConnection connection;
+		public IConnection Connection
+		{
+			get { return connection; }
+		}
 
         public PersistentConnection(IConnectionFactory connectionFactory, IEasyNetQLogger logger, IEventBus eventBus)
         {

@@ -21,7 +21,7 @@ namespace EasyNetQ.Tests.ConsumeTests
         {
             mockBuilder = new MockBuilder();
 
-            var queue = new Queue("test_queue", false);
+            var queue = new Queue("test_queue", false,false,false,false);
 
             var countdownEvent = new CountdownEvent(3);
 

@@ -27,6 +27,15 @@ namespace EasyNetQ
         private readonly IConventions conventions;
         private readonly AdvancedBusEventHandlers advancedBusEventHandlers;
 
+		public  string ConnectionHostName
+		{
+			get { return connection.Connection.Endpoint.HostName; }
+		}
+		public int ConnectionPort
+		{
+			get { return connection.Connection.Endpoint.Port; }
+		}
+
         public RabbitAdvancedBus(
             IConnectionFactory connectionFactory,
             IConsumerFactory consumerFactory,
@@ -287,10 +296,11 @@ namespace EasyNetQ
             string deadLetterExchange = null, 
             string deadLetterRoutingKey = null,
             int? maxLength = null,
-            int? maxLengthBytes = null)
+            int? maxLengthBytes = null,
+            bool consumerRepairable = false)
         {
             return QueueDeclareAsync(name, passive, durable, exclusive, autoDelete, perQueueMessageTtl,
-                expires, maxPriority, deadLetterExchange, deadLetterRoutingKey, maxLength, maxLengthBytes).Result;
+                expires, maxPriority, deadLetterExchange, deadLetterRoutingKey, maxLength, maxLengthBytes,consumerRepairable).Result;
         }
 
         public Task<IQueue> QueueDeclareAsync(
@@ -305,14 +315,15 @@ namespace EasyNetQ
             string deadLetterExchange = null, 
             string deadLetterRoutingKey = null,
             int? maxLength = null,
-            int? maxLengthBytes = null)
+            int? maxLengthBytes = null,
+            bool consumerRepairable = false)
         {
             Preconditions.CheckNotNull(name, "name");
 
             if (passive)
             {
                 return clientCommandDispatcher.InvokeAsync(x => x.QueueDeclarePassive(name))
-                    .Then(() => (IQueue)new Queue(name, exclusive));
+                    .Then(() => (IQueue)new Queue(name, exclusive,durable,autoDelete,consumerRepairable));
             }
 
             var arguments = new Dictionary<string, object>();
@@ -350,17 +361,17 @@ namespace EasyNetQ
                 logger.DebugWrite("Declared Queue: '{0}', durable:{1}, exclusive:{2}, autoDelete:{3}, args:{4}",
                     name, durable, exclusive, autoDelete, string.Join(", ", arguments.Select(kvp => String.Format("{0}={1}", kvp.Key, kvp.Value))));
 
-                return (IQueue)new Queue(name, exclusive);
+                return (IQueue)new Queue(name, exclusive,durable,autoDelete,consumerRepairable);
             });
         }
 
-        public virtual IQueue QueueDeclare()
+        public virtual IQueue QueueDeclare(bool exclusive,bool durable,bool autodelete,bool consumerRepairable)
         {
             var task = clientCommandDispatcher.InvokeAsync(x => x.QueueDeclare());
             task.Wait();
             var queueDeclareOk = task.Result;
             logger.DebugWrite("Declared Server Generted Queue '{0}'", queueDeclareOk.QueueName);
-            return new Queue(queueDeclareOk.QueueName, true);
+            return new Queue(queueDeclareOk.QueueName, true,durable,autodelete,consumerRepairable);
         }
 
         public virtual void QueueDelete(IQueue queue, bool ifUnused = false, bool ifEmpty = false)
@@ -391,7 +402,7 @@ namespace EasyNetQ
             string alternateExchange = null,
             bool delayed = false)
         {
-
+			
             return ExchangeDeclareAsync(name, type, passive, durable, autoDelete, @internal, alternateExchange, delayed).Result;
         }
 
@@ -455,6 +466,7 @@ namespace EasyNetQ
             clientCommandDispatcher.InvokeAsync(x => x.QueueBind(queue.Name, exchange.Name, routingKey)).Wait();
             logger.DebugWrite("Bound queue {0} to exchange {1} with routing key {2}",
                 queue.Name, exchange.Name, routingKey);
+            queue.BoundExchange = exchange.Name;
             return new Binding(queue, exchange, routingKey);
         }
 
@@ -469,6 +481,7 @@ namespace EasyNetQ
                     {
                         logger.DebugWrite("Bound queue {0} to exchange {1} with routing key {2}",
                             queue.Name, exchange.Name, routingKey);
+                        queue.BoundExchange = exchange.Name;
                         return (IBinding)new Binding(queue, exchange, routingKey);
                     });
         }

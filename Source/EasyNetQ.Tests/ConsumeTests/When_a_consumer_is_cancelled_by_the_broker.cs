@@ -20,7 +20,7 @@ namespace EasyNetQ.Tests.ConsumeTests
         {
             mockBuilder = new MockBuilder();
 
-            var queue = new Queue("my_queue", false);
+            var queue = new Queue("my_queue", false,false,false,false);
 
             mockBuilder.Bus.Advanced.Consume(queue, (bytes, properties, arg3) => Task.Factory.StartNew(() => { }));
 

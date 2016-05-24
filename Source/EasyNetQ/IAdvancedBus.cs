@@ -265,7 +265,8 @@ namespace EasyNetQ
             string deadLetterExchange = null, 
             string deadLetterRoutingKey = null,
             int? maxLength = null,
-            int? maxLengthBytes = null);
+            int? maxLengthBytes = null,
+            bool consumerRepariable = false);
 
         /// <summary>
         /// Declare a queue. If the queue already exists this method does nothing
@@ -295,7 +296,8 @@ namespace EasyNetQ
             string deadLetterExchange = null, 
             string deadLetterRoutingKey = null,
             int? maxLength = null,
-            int? maxLengthBytes = null);
+            int? maxLengthBytes = null,
+            bool consumerRepairable = false);
 
         /// <summary>
         /// Declare a transient server named queue. Note, this queue will only last for duration of the
@@ -303,7 +305,7 @@ namespace EasyNetQ
         /// consumers.
         /// </summary>
         /// <returns>The queue</returns>
-        IQueue QueueDeclare();
+        IQueue QueueDeclare(bool durable, bool exclusive, bool autodelete, bool consumerRepairable);
 
         /// <summary>
         /// Delete a queue
@@ -473,5 +475,8 @@ namespace EasyNetQ
         /// The conventions used by EasyNetQ to name its routing topology elements.
         /// </summary>
         IConventions Conventions { get; }
+
+		string ConnectionHostName { get; }
+		int ConnectionPort { get; }
     }
 }

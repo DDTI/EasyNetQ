@@ -69,7 +69,8 @@ namespace EasyNetQ.Consumer
             var internalConsumer = internalConsumerFactory.CreateConsumer();
             internalConsumers.TryAdd(internalConsumer, null);
 
-            internalConsumer.Cancelled += consumer => Dispose();
+            if(!this.queue.IsConsumerRepairable)
+                internalConsumer.Cancelled += consumer => Dispose();
 
             internalConsumer.StartConsuming(
                 connection, 

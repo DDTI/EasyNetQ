@@ -67,7 +67,7 @@ namespace EasyNetQ.Tests
             mockBuilder = new MockBuilder();
             advancedBus = mockBuilder.Bus.Advanced;
 
-            var queue = new Topology.Queue("my_queue", false);
+            var queue = new Topology.Queue("my_queue", false,false,false,false);
             advancedBus.QueueDelete(queue);
         }
 
@@ -205,7 +205,7 @@ namespace EasyNetQ.Tests
             advancedBus = mockBuilder.Bus.Advanced;
 
             var exchange = new Exchange("my_exchange");
-            var queue = new Topology.Queue("my_queue", false);
+            var queue = new Topology.Queue("my_queue", false,false,false,false);
 
             binding = advancedBus.Bind(exchange, queue, "my_routing_key");
         }
@@ -242,7 +242,7 @@ namespace EasyNetQ.Tests
             advancedBus = mockBuilder.Bus.Advanced;
 
             var exchange = new Exchange("my_exchange");
-            var queue = new Topology.Queue("my_queue", false);
+            var queue = new Topology.Queue("my_queue", false,false,false,false);
             binding = advancedBus.Bind(exchange, queue, "my_routing_key");
             advancedBus.BindingDelete(binding);
         }

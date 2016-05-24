@@ -128,14 +128,16 @@ namespace EasyNetQ
             var queueName = conventions.QueueNamingConvention(typeof(T), subscriptionId);
             var exchangeName = conventions.ExchangeNamingConvention(typeof(T));
 
-            var queue = advancedBus.QueueDeclare(queueName, autoDelete: configuration.AutoDelete, expires: configuration.Expires);
+            var queue = advancedBus.QueueDeclare(queueName, autoDelete: configuration.AutoDelete, expires: configuration.Expires,
+                consumerRepariable: true);
+                
             var exchange = advancedBus.ExchangeDeclare(exchangeName, ExchangeType.Topic);
 
             foreach (var topic in configuration.Topics.DefaultIfEmpty("#"))
             {
                 advancedBus.Bind(exchange, queue, topic);
             }
-
+            
             var consumerCancellation = advancedBus.Consume<T>(
                 queue,
                 (message, messageReceivedInfo) => onMessage(message.Body),

@@ -36,7 +36,7 @@ namespace EasyNetQ.Tests.PersistentConsumerTests
             createConsumerCalled = 0;
             mockBuilder = new MockBuilder();
 
-            queue = new Queue(queueName, false);
+            queue = new Queue(queueName, false,false,false,false);
             onMessage = (body, properties, info) => Task.Factory.StartNew(() => { });
 
             persistentConnection = MockRepository.GenerateStub<IPersistentConnection>();
