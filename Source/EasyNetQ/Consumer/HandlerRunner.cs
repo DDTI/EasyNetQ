@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using EasyNetQ.Events;
+using EasyNetQ.Internals;
 using RabbitMQ.Client.Exceptions;
 
 namespace EasyNetQ.Consumer
@@ -29,7 +30,7 @@ namespace EasyNetQ.Consumer
             this.eventBus = eventBus;
         }
 
-        public void InvokeUserMessageHandler(ConsumerExecutionContext context)
+        public virtual void InvokeUserMessageHandler(ConsumerExecutionContext context)
         {
             Preconditions.CheckNotNull(context, "context");
 
@@ -62,14 +63,14 @@ namespace EasyNetQ.Consumer
             completionTask.ContinueWith(task => DoAck(context, GetAckStrategy(context, task)));
         }
 
-        private AckStrategy GetAckStrategy(ConsumerExecutionContext context, Task task)
+        protected virtual AckStrategy GetAckStrategy(ConsumerExecutionContext context, Task task)
         {
             var ackStrategy = AckStrategies.Ack;
             try
             {
                 if (task.IsFaulted)
                 {
-                    logger.ErrorWrite(BuildErrorMessage(context, task.Exception));
+                    logger.ErrorWrite(BuildErrorMessage(context, task.Exception).EscapeBraces());
                     ackStrategy = consumerErrorStrategy.HandleConsumerError(context, task.Exception);
                 }
                 else if (task.IsCanceled)
@@ -81,12 +82,12 @@ namespace EasyNetQ.Consumer
             {
                 logger.ErrorWrite("Exception in ConsumerErrorStrategy:\n{0}",
                                   consumerErrorStrategyError);
-                return AckStrategies.Nothing;
+                ackStrategy = AckStrategies.Nothing;
             }
             return ackStrategy;
         }
-        
-        private void DoAck(ConsumerExecutionContext context, AckStrategy ackStrategy)
+
+        protected virtual void DoAck(ConsumerExecutionContext context, AckStrategy ackStrategy)
         {
             const string failedToAckMessage =
                 "Basic ack failed because channel was closed with message '{0}'." +
@@ -125,7 +126,7 @@ namespace EasyNetQ.Consumer
             }
         }
 
-        private string BuildErrorMessage(ConsumerExecutionContext context, Exception exception)
+        protected virtual string BuildErrorMessage(ConsumerExecutionContext context, Exception exception)
         {
             var message = Encoding.UTF8.GetString(context.Body);
 
@@ -140,8 +141,17 @@ namespace EasyNetQ.Consumer
 
         public void Dispose()
         {
-            consumerErrorStrategy.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposing)
+                return;
+
+            if (consumerErrorStrategy != null)
+                consumerErrorStrategy.Dispose();
         }
     }
-
 }

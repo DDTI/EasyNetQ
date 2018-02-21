@@ -5,28 +5,26 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EasyNetQ.Topology;
-using NUnit.Framework;
+using Xunit;
 
 namespace EasyNetQ.Tests.Integration
 {
-    [TestFixture, Explicit("Requires a RabbitMQ instance on localhost")]
-    public class AdvancedApiExamples
+    [Explicit("Requires a RabbitMQ instance on localhost")]
+    public class AdvancedApiExamples : IDisposable
     {
         private IAdvancedBus advancedBus;
 
-        [SetUp]
-        public void SetUp()
+        public AdvancedApiExamples()
         {
             advancedBus = RabbitHutch.CreateBus("host=localhost").Advanced;
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             advancedBus.Dispose();
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void DeclareTopology()
         {
             var queue = advancedBus.QueueDeclare("my_queue");
@@ -35,7 +33,7 @@ namespace EasyNetQ.Tests.Integration
 
         }
 
-        [Test,Explicit]
+        [Fact][Explicit]
         public void DeclareTopologyAndCheckPassive()
         {
             var queue = advancedBus.QueueDeclare("my_queue");
@@ -44,13 +42,13 @@ namespace EasyNetQ.Tests.Integration
             advancedBus.ExchangeDeclare("my_exchange", ExchangeType.Direct, passive: true);
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void DeclareWithTtlAndExpire()
         {
             advancedBus.QueueDeclare("my_queue", perQueueMessageTtl: 500, expires: 500);
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void DeclareExchangeWithAlternate()
         {
             const string alternate = "alternate";
@@ -63,10 +61,10 @@ namespace EasyNetQ.Tests.Integration
             advancedBus.Bind(alternateExchange, queue, bindingKey);
 
             var message = Encoding.UTF8.GetBytes("Some message");
-            advancedBus.Publish(originalExchange, bindingKey, false, false, new MessageProperties(), message);
+            advancedBus.Publish(originalExchange, bindingKey, false, new MessageProperties(), message);
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void DeclareDelayedExchange()
         {
             const string bindingKey = "the-binding-key";
@@ -78,11 +76,11 @@ namespace EasyNetQ.Tests.Integration
             var message = Encoding.UTF8.GetBytes("Some message");
             var messageProperties = new MessageProperties();
             messageProperties.Headers.Add("x-delay", 5000);
-            advancedBus.Publish(delayedExchange, bindingKey, false, false, messageProperties, message);
+            advancedBus.Publish(delayedExchange, bindingKey, false, messageProperties, message);
         }
 
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void ConsumeFromAQueue()
         {
             var queue = new Queue("my_queue", false,false,false,false);
@@ -95,18 +93,18 @@ namespace EasyNetQ.Tests.Integration
             Thread.Sleep(500);
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void PublishToAnExchange()
         {
             var exchange = new Exchange("my_exchange");
 
             var body = Encoding.UTF8.GetBytes("Hello World!");
-            advancedBus.Publish(exchange, "routing_key", false, false, new MessageProperties(), body);
+            advancedBus.Publish(exchange, "routing_key", false, new MessageProperties(), body);
 
             Thread.Sleep(5000);
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void Should_be_able_to_delete_objects()
         {
             // declare some objects
@@ -120,7 +118,7 @@ namespace EasyNetQ.Tests.Integration
             advancedBus.QueueDelete(queue);
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void Should_consume_a_message()
         {
             var queue = advancedBus.QueueDeclare("consume_test");
@@ -128,18 +126,16 @@ namespace EasyNetQ.Tests.Integration
                 Task.Factory.StartNew(() => 
                     Console.WriteLine("Got message {0}", message.Body.Text)));
 
-            advancedBus.Publish(Exchange.GetDefault(), "consume_test", false, false, 
-                new Message<MyMessage>(new MyMessage{ Text = "Wotcha!"}));
+            advancedBus.Publish(Exchange.GetDefault(), "consume_test", false, new Message<MyMessage>(new MyMessage{ Text = "Wotcha!"}));
 
             Thread.Sleep(1000);
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void Should_be_able_to_get_a_message()
         {
             var queue = advancedBus.QueueDeclare("get_test");
-            advancedBus.Publish(Exchange.GetDefault(), "get_test", false, false,
-                new Message<MyMessage>(new MyMessage { Text = "Oh! Hello!" }));
+            advancedBus.Publish(Exchange.GetDefault(), "get_test", false, new Message<MyMessage>(new MyMessage { Text = "Oh! Hello!" }));
 
             var getResult = advancedBus.Get<MyMessage>(queue);
 
@@ -153,7 +149,7 @@ namespace EasyNetQ.Tests.Integration
             }
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void Should_set_MessageAvailable_to_false_when_queue_is_empty()
         {
             var queue = advancedBus.QueueDeclare("get_empty_queue_test");
@@ -165,14 +161,57 @@ namespace EasyNetQ.Tests.Integration
             }
         }
 
-        [Test, Explicit]
+        [Fact][Explicit]
         public void Should_be_able_to_get_queue_length()
         {
             var queue = advancedBus.QueueDeclare("count_test");
-            advancedBus.Publish(Exchange.GetDefault(), "count_test", false, false,
-                new Message<MyMessage>(new MyMessage { Text = "Oh! Hello!" }));
+            advancedBus.Publish(Exchange.GetDefault(), "count_test", false, new Message<MyMessage>(new MyMessage { Text = "Oh! Hello!" }));
             uint messageCount = advancedBus.MessageCount(queue);
             Console.WriteLine("{0} messages in queue", messageCount);
+        }
+
+        [Fact][Explicit]
+        public void Should_be_able_to_dead_letter_to_fixed_queue()
+        {
+            // create a main queue and a retry queue with retry queue dead lettering messages directly
+            // to main queue
+            var queue = advancedBus.QueueDeclare("main_queue");
+            var exchange = advancedBus.ExchangeDeclare("my_exchange", ExchangeType.Topic);
+            var retryQueue = advancedBus.QueueDeclare("retry_queue", deadLetterExchange: "", deadLetterRoutingKey: "main_queue");
+            advancedBus.Bind(exchange, retryQueue, "routing_key");
+
+            // consume from main queue to see if dead lettering is working as expected
+            advancedBus.Consume<MyMessage>(queue, (message, info) =>
+                Task.Factory.StartNew(() =>
+                    Console.WriteLine("Got message {0}", message.Body.Text)));
+
+            // publish the message to retry queue which should end up in the main queue after expiration
+            advancedBus.Publish(exchange, "routing_key", false, new Message<MyMessage>(new MyMessage() { Text = "My Message" }, new MessageProperties { Expiration = "50" }));
+
+            Thread.Sleep(1000);
+        }
+
+        [Fact][Explicit]
+        public void Should_be_able_to_dead_letter_to_given_exchange()
+        {
+            // create a main queue and a retry queue both binding to the same topic exchange with 
+            // different routing keys. Retry queue is dead lettering to the exchange with routing key
+            // of main queue binding.
+            var queue = advancedBus.QueueDeclare("main_queue");
+            var exchange = advancedBus.ExchangeDeclare("my_exchange", ExchangeType.Topic);
+            advancedBus.Bind(exchange, queue, "main_routing_key");
+            var retryQueue = advancedBus.QueueDeclare("my_retry_queue", deadLetterExchange: "my_exchange", deadLetterRoutingKey: "main_routing_key");
+            advancedBus.Bind(exchange, retryQueue, "retry_routing_key");
+
+            // consume messages from main queue
+            advancedBus.Consume<MyMessage>(queue, (message, info) =>
+                Task.Factory.StartNew(() =>
+                    Console.WriteLine("Got message {0}", message.Body.Text)));
+
+            // publish message to the retry queue which should dead letter to main queue after expiration
+            advancedBus.Publish(exchange, "retry_routing_key", false, new Message<MyMessage>(new MyMessage() { Text = "My Message" }, new MessageProperties { Expiration = "50" }));
+
+            Thread.Sleep(1000);
         }
     }
 }

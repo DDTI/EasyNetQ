@@ -5,8 +5,8 @@ namespace EasyNetQ.AmqpExceptions
 {
     public class AmqpException
     {
-        public AmapExceptionPreface Preface { get; private set; }
-        public IList<IAmqpExceptionElement> Elements { get; private set; }
+        public AmapExceptionPreface Preface { get; }
+        public IList<IAmqpExceptionElement> Elements { get; }
 
         public AmqpException(AmapExceptionPreface preface, IList<IAmqpExceptionElement> elements)
         {
@@ -19,16 +19,16 @@ namespace EasyNetQ.AmqpExceptions
             return Elements.OfType<T>().Select(x => x.Value).SingleOrDefault();
         }
 
-        public int Code { get { return GetElement<AmqpExceptionCodeElement>(); } }
-        public int ClassId { get { return GetElement<AmqpExceptionClassIdElement>(); } }
-        public int MethodId { get { return GetElement<AmqpExceptionMethodIdElement>(); } }
+        public int Code => GetElement<AmqpExceptionCodeElement>();
+        public int ClassId => GetElement<AmqpExceptionClassIdElement>();
+        public int MethodId => GetElement<AmqpExceptionMethodIdElement>();
 
         public static ushort ConnectionClosed = 320;
     }
 
     public class AmapExceptionPreface
     {
-        public string Text { get; private set; }
+        public string Text { get; }
 
         public AmapExceptionPreface(string text)
         {
@@ -40,7 +40,7 @@ namespace EasyNetQ.AmqpExceptions
 
     public class TextElement : IAmqpExceptionElement
     {
-        public string Text { get; private set; }
+        public string Text { get; }
 
         public TextElement(string text)
         {
@@ -50,8 +50,8 @@ namespace EasyNetQ.AmqpExceptions
 
     public class AmqpExceptionKeyValueElement : IAmqpExceptionElement
     {
-        public string Key { get; private set; }
-        public string Value { get; private set; }
+        public string Key { get; }
+        public string Value { get; }
 
         public AmqpExceptionKeyValueElement(string key, string value)
         {

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
+
+using EasyNetQ.Consumer;
+
 using RabbitMQ.Client.Exceptions;
 
 namespace EasyNetQ.Hosepipe
@@ -11,9 +13,16 @@ namespace EasyNetQ.Hosepipe
 
     public class QueueRetreival : IQueueRetreival
     {
+        private readonly IErrorMessageSerializer errorMessageSerializer;
+
+        public QueueRetreival(IErrorMessageSerializer errorMessageSerializer)
+        {
+            this.errorMessageSerializer = errorMessageSerializer;
+        }
+
         public IEnumerable<HosepipeMessage> GetMessagesFromQueue(QueueParameters parameters)
         {
-            using (var connection = HosepipeConnection.FromParamters(parameters))
+            using (var connection = HosepipeConnection.FromParameters(parameters))
             using (var channel = connection.CreateModel())
             {
                 try
@@ -29,7 +38,7 @@ namespace EasyNetQ.Hosepipe
                 var count = 0;
                 while (count++ < parameters.NumberOfMessagesToRetrieve)
                 {
-                    var basicGetResult = channel.BasicGet(parameters.QueueName, noAck: parameters.Purge);
+                    var basicGetResult = channel.BasicGet(parameters.QueueName, parameters.Purge);
                     if (basicGetResult == null) break; // no more messages on the queue
 
                     var properties = new MessageProperties(basicGetResult.BasicProperties);
@@ -41,7 +50,7 @@ namespace EasyNetQ.Hosepipe
                         basicGetResult.RoutingKey,
                         parameters.QueueName);
 
-                    yield return new HosepipeMessage(Encoding.UTF8.GetString(basicGetResult.Body), properties, info);
+                    yield return new HosepipeMessage(errorMessageSerializer.Serialize(basicGetResult.Body), properties, info);
                 }
             }            
         } 

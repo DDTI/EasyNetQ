@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace EasyNetQ
 {
@@ -26,7 +25,7 @@ namespace EasyNetQ
     public class BasicGetResult<T> : IBasicGetResult<T> where T : class
     {
         private readonly IMessage<T> message;
-        public bool MessageAvailable { get; private set; }
+        public bool MessageAvailable { get; }
 
         public IMessage<T> Message
         {
@@ -61,9 +60,9 @@ namespace EasyNetQ
 
     public class BasicGetResult : IBasicGetResult
     {
-        public byte[] Body { get; private set; }
-        public MessageProperties Properties { get; private set; }
-        public MessageReceivedInfo Info { get; private set; }
+        public byte[] Body { get; }
+        public MessageProperties Properties { get; }
+        public MessageReceivedInfo Info { get; }
 
         public BasicGetResult(byte[] body, MessageProperties properties, MessageReceivedInfo info)
         {
@@ -73,7 +72,6 @@ namespace EasyNetQ
         }
     }
 
-    [Serializable]
     public class MessageNotAvailableException : Exception
     {
         //
@@ -94,12 +92,6 @@ namespace EasyNetQ
         }
 
         public MessageNotAvailableException(string message, Exception inner) : base(message, inner)
-        {
-        }
-
-        protected MessageNotAvailableException(
-            SerializationInfo info,
-            StreamingContext context) : base(info, context)
         {
         }
     }

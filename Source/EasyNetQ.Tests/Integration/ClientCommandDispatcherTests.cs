@@ -8,19 +8,17 @@ using System.Threading.Tasks;
 using EasyNetQ.ConnectionString;
 using EasyNetQ.Loggers;
 using EasyNetQ.Producer;
-using NUnit.Framework;
+using Xunit;
 
 namespace EasyNetQ.Tests.Integration
 {
-    [TestFixture]
     [Explicit("Requires a RabbitMQ instance on localhost")]
-    public class ClientCommandDispatcherTests
+    public class ClientCommandDispatcherTests : IDisposable
     {
         private IClientCommandDispatcher dispatcher;
         private IPersistentConnection connection;
 
-        [SetUp]
-        public void SetUp()
+        public ClientCommandDispatcherTests()
         {
             var eventBus = new EventBus();
             var logger = new ConsoleLogger();
@@ -30,42 +28,41 @@ namespace EasyNetQ.Tests.Integration
             var connectionFactory = new ConnectionFactoryWrapper(configuration, hostSelectionStrategy);
             connection = new PersistentConnection(connectionFactory, logger, eventBus);
             var persistentChannelFactory = new PersistentChannelFactory(logger, configuration, eventBus);
-            dispatcher = new ClientCommandDispatcher(connection, persistentChannelFactory);
+            dispatcher = new ClientCommandDispatcher(configuration, connection, persistentChannelFactory);
             connection.Initialize();
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             dispatcher.Dispose();
             connection.Dispose();
         }
 
-        [Test]
+        [Fact]
         public void Should_dispatch_simple_channel_action()
         {
             var task = dispatcher.InvokeAsync(x =>
                 {
-                    x.ExchangeDeclare("MyExchange", "direct");
+                    x.ExchangeDeclare("MyExchange", "direct", true, false, new Dictionary<string, object>());
                     Console.Out.WriteLine("declare executed");
                 });
             task.Wait();
             Console.Out.WriteLine("Task complete");
         }
 
-        [Test]
+        [Fact]
         public void Should_bubble_exception()
         {
             var task = dispatcher.InvokeAsync(x =>
             {
-                x.ExchangeDeclare("MyExchange", "topic");
+                x.ExchangeDeclare("MyExchange", "topic", true, false, new Dictionary<string, object>());
                 Console.Out.WriteLine("declare executed");
             });
             task.Wait();
             Console.Out.WriteLine("Task complete");
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_get_result_back()
         {
             var task = dispatcher.InvokeAsync(x => x.QueueDeclare("MyQueue", true, false, false, null));
@@ -74,7 +71,7 @@ namespace EasyNetQ.Tests.Integration
             Console.Out.WriteLine(queueDeclareOk.QueueName);
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_do_lots_of_operations_from_different_threads()
         {
             Helpers.ClearAllQueues();
@@ -89,7 +86,7 @@ namespace EasyNetQ.Tests.Integration
                         {
                             dispatcher.InvokeAsync(
                                 x =>
-                                x.BasicPublish("", "MyQueue", false, false, x.CreateBasicProperties(), body)
+                                x.BasicPublish("", "MyQueue", false, x.CreateBasicProperties(), body)
                                 ).Wait();
                         }
                     }, TaskCreationOptions.LongRunning));

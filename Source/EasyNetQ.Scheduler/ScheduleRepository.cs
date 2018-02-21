@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using EasyNetQ.SystemMessages;
+using Newtonsoft.Json;
 
 namespace EasyNetQ.Scheduler
 {
@@ -18,12 +19,14 @@ namespace EasyNetQ.Scheduler
     public class ScheduleRepository : IScheduleRepository
     {
         private readonly ScheduleRepositoryConfiguration configuration;
+        private readonly IEasyNetQLogger log;
         private readonly Func<DateTime> now;
         private readonly ISqlDialect dialect;
 
-        public ScheduleRepository(ScheduleRepositoryConfiguration configuration, Func<DateTime> now)
+        public ScheduleRepository(ScheduleRepositoryConfiguration configuration, IEasyNetQLogger log, Func<DateTime> now)
         {
             this.configuration = configuration;
+            this.log = log;
             this.now = now;
             this.dialect = SqlDialectResolver.Resolve(configuration.ProviderName);
         }
@@ -36,6 +39,11 @@ namespace EasyNetQ.Scheduler
                 AddParameter(command, dialect.BindingKeyParameterName, scheduleMe.BindingKey, DbType.String);
                 AddParameter(command, dialect.CancellationKeyParameterName, scheduleMe.CancellationKey, DbType.String);
                 AddParameter(command, dialect.MessageParameterName, scheduleMe.InnerMessage, DbType.Binary);
+                AddParameter(command, dialect.ExchangeParameterName, scheduleMe.Exchange, DbType.String);
+                AddParameter(command, dialect.ExchangeTypeParameterName, scheduleMe.ExchangeType, DbType.String);
+                AddParameter(command, dialect.RoutingKeyParameterName, scheduleMe.RoutingKey, DbType.String);
+                AddParameter(command, dialect.MessagePropertiesParameterName, SerializeToString(scheduleMe.MessageProperties), DbType.String);
+                AddParameter(command, dialect.InstanceNameParameterName, configuration.InstanceName, DbType.String);
 
                 command.ExecuteNonQuery();
             });
@@ -46,9 +54,15 @@ namespace EasyNetQ.Scheduler
             ThreadPool.QueueUserWorkItem(state =>
                 WithStoredProcedureCommand(dialect.CancelProcedureName, command =>
                 {
-                    AddParameter(command, dialect.CancellationKeyParameterName, unscheduleMe.CancellationKey, DbType.String);
-    
-                    command.ExecuteNonQuery();
+                    try
+                    {
+                        AddParameter(command, dialect.CancellationKeyParameterName, unscheduleMe.CancellationKey, DbType.String);
+                        command.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        log.ErrorWrite("ScheduleRepository.Cancel threw an exception {0}", ex);
+                    }
                 })
             );
         }
@@ -60,9 +74,11 @@ namespace EasyNetQ.Scheduler
 
             WithStoredProcedureCommand(dialect.SelectProcedureName, command =>
             {
+                var dateTime = now();
                 AddParameter(command, dialect.RowsParameterName, configuration.MaximumScheduleMessagesToReturn, DbType.Int32);
                 AddParameter(command, dialect.StatusParameterName, 0, DbType.Int16);
-                AddParameter(command, dialect.WakeTimeParameterName, now(), DbType.DateTime);
+                AddParameter(command, dialect.WakeTimeParameterName, dateTime, DbType.DateTime);
+                AddParameter(command, dialect.InstanceNameParameterName, configuration.InstanceName ?? "", DbType.String);
 
                 using (var reader = command.ExecuteReader())
                 {
@@ -70,12 +86,17 @@ namespace EasyNetQ.Scheduler
                     {
                         scheduledMessages.Add(new ScheduleMe
                         {
-                            WakeTime = reader.GetDateTime(2),
-                            BindingKey = reader.GetString(3),
-                            InnerMessage = (byte[])reader.GetValue(4)
+                            WakeTime = (DateTime) reader["WakeTime"],
+                            BindingKey = reader["BindingKey"].ToString(),
+                            InnerMessage = (byte[])reader["InnerMessage"],
+                            CancellationKey = reader["CancellationKey"].ToString(),
+                            Exchange = reader["Exchange"].ToString(),
+                            ExchangeType = reader["ExchangeType"].ToString(),
+                            RoutingKey = reader["RoutingKey"].ToString(),
+                            MessageProperties = DeserializeToMessageProperties(reader["MessageProperties"].ToString()),
                         });
 
-                        scheduleMessageIds.Add(reader.GetInt32(0));
+                        scheduleMessageIds.Add((int)reader["WorkItemId"]);
                     }
                 }
             });
@@ -91,18 +112,40 @@ namespace EasyNetQ.Scheduler
             ThreadPool.QueueUserWorkItem(state =>
                 WithStoredProcedureCommand(dialect.MarkForPurgeProcedureName, command =>
                 {
-                    var purgeDate = now().AddDays(configuration.PurgeDelayDays);
-
-                    var idParameter = AddParameter(command, dialect.IdParameterName, DbType.Int32);
-                    AddParameter(command, dialect.PurgeDateParameterName, purgeDate, DbType.DateTime);
-
-                    foreach (var scheduleMessageId in scheduleMessageIds)
+                    try
                     {
-                        idParameter.Value = scheduleMessageId;
-                        command.ExecuteNonQuery();
+                        var purgeDate = now().AddDays(configuration.PurgeDelayDays);
+
+                        var idParameter = AddParameter(command, dialect.IdParameterName, DbType.Int32);
+                        AddParameter(command, dialect.PurgeDateParameterName, purgeDate, DbType.DateTime);
+
+                        foreach (var scheduleMessageId in scheduleMessageIds)
+                        {
+                            idParameter.Value = scheduleMessageId;
+                            command.ExecuteNonQuery();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        log.ErrorWrite("ScheduleRepository.MarkItemsForPurge threw an exception {0}", ex);
                     }
                 })
             );
+        }
+
+        private static MessageProperties DeserializeToMessageProperties(string properties)
+        {
+            // backwards compatibility with older messages
+            if (string.IsNullOrWhiteSpace(properties))
+                return null;
+            return JsonConvert.DeserializeObject<MessageProperties>(properties);
+        }
+
+        private static string SerializeToString(MessageProperties properties)
+        {
+            if (properties == null)
+                throw new ArgumentNullException("properties");
+            return JsonConvert.SerializeObject(properties);
         }
 
         public void Purge()

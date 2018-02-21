@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using EasyNetQ.FluentConfiguration;
+using EasyNetQ.Internals;
 using EasyNetQ.Producer;
 using EasyNetQ.Topology;
 
@@ -95,7 +96,7 @@ namespace EasyNetQ.NonGeneric
             var easyNetQMessage = MessageFactory.CreateInstance(messageType, message);
             easyNetQMessage.Properties.DeliveryMode = messageDeliveryModeStrategy.GetDeliveryMode(messageType);
 
-            return advancedBus.PublishAsync(exchange, topic, false, false, easyNetQMessage);
+            return advancedBus.PublishAsync(exchange, topic, false, easyNetQMessage);
         }
 
         private static bool HasCorrectParameters(MethodInfo methodInfo)

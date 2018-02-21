@@ -8,14 +8,13 @@ using System.Threading.Tasks;
 using EasyNetQ.Loggers;
 using EasyNetQ.Management.Client;
 using EasyNetQ.Topology;
-using NUnit.Framework;
-using Rhino.Mocks;
+using Xunit;
+using NSubstitute;
 
 namespace EasyNetQ.Tests.Integration
 {
-    [TestFixture]
     [Explicit]
-    public class AdvancedApiPingPongTest
+    public class AdvancedApiPingPongTest : IDisposable
     {
         private readonly IBus[] buses = new IBus[2];
         private readonly IQueue[] queues = new IQueue[2];
@@ -27,13 +26,12 @@ namespace EasyNetQ.Tests.Integration
         private const long rallyLength = 10000;
         private long rallyCount;
 
-        [SetUp]
-        public void SetUp()
+        public AdvancedApiPingPongTest()
         {
             var loggers = new[]
                 {
                     new ConsoleLogger(), 
-                    MockRepository.GenerateStub<IEasyNetQLogger>()
+                    Substitute.For<IEasyNetQLogger>()
                 };
 
             rallyCount = 0;
@@ -49,8 +47,7 @@ namespace EasyNetQ.Tests.Integration
             }
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             for (int i = 0; i < 2; i++)
             {
@@ -58,7 +55,7 @@ namespace EasyNetQ.Tests.Integration
             }
         }
 
-        [Test, Explicit("Requires a RabbitMQ instance on localhost.")]
+        [Fact][Explicit("Requires a RabbitMQ instance on localhost.")]
         public void Ping_pong_with_advanced_consumers()
         {
             IntermittentDisconnection();
@@ -72,7 +69,7 @@ namespace EasyNetQ.Tests.Integration
                     CorrelationId = "0"
                 };
             var body = Encoding.UTF8.GetBytes(messageText);
-            buses[1].Advanced.Publish(exchanges[1], routingKey, false, false, properties, body);
+            buses[1].Advanced.Publish(exchanges[1], routingKey, false, properties, body);
 
             while (Interlocked.Read(ref rallyCount) < rallyLength)
             {
@@ -105,7 +102,7 @@ namespace EasyNetQ.Tests.Integration
                     {
                         try
                         {
-                            buses[from].Advanced.Publish(exchanges[to], routingKey, false, false, publishProperties, nextMessage.Body);
+                            buses[from].Advanced.Publish(exchanges[to], routingKey, false, publishProperties, nextMessage.Body);
                             published = true;
                         }
                         catch (Exception)

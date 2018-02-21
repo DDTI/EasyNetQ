@@ -1,11 +1,16 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using RabbitMQ.Client;
+using System.Reflection;
 
 namespace EasyNetQ
 {
     public class MessageProperties
+#if NETFX
+        : ICloneable
+#endif
     {
         public MessageProperties()
         {
@@ -67,6 +72,31 @@ namespace EasyNetQ
             {
                 basicProperties.Headers = new Dictionary<string, object>(Headers);
             }
+        }
+        public object Clone()
+        {
+            var copy = new MessageProperties();
+
+            if (contentTypePresent) copy.ContentType = ContentType;
+            if (contentEncodingPresent) copy.ContentEncoding = ContentEncoding;
+            if (deliveryModePresent) copy.DeliveryMode = DeliveryMode;
+            if (priorityPresent) copy.Priority = Priority;
+            if (correlationIdPresent) copy.CorrelationId = CorrelationId;
+            if (replyToPresent) copy.ReplyTo = ReplyTo;
+            if (expirationPresent) copy.Expiration = Expiration;
+            if (messageIdPresent) copy.MessageId = MessageId;
+            if (timestampPresent) copy.Timestamp = Timestamp;
+            if (typePresent) copy.Type = Type;
+            if (userIdPresent) copy.UserId = UserId;
+            if (appIdPresent) copy.AppId = AppId;
+            if (clusterIdPresent) copy.ClusterId = ClusterId;
+
+            if (headersPresent)
+            {
+                copy.Headers = new Dictionary<string, object>(Headers);
+            }
+
+            return copy;
         }
 
         private bool contentTypePresent = false;

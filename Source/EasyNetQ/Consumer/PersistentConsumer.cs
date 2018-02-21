@@ -10,7 +10,7 @@ namespace EasyNetQ.Consumer
     public class PersistentConsumer : IConsumer
     {
         private readonly IQueue queue;
-        private readonly Func<Byte[], MessageProperties, MessageReceivedInfo, Task> onMessage;
+        private readonly Func<byte[], MessageProperties, MessageReceivedInfo, Task> onMessage;
         private readonly IPersistentConnection connection;
         private readonly IConsumerConfiguration configuration;
 
@@ -72,12 +72,16 @@ namespace EasyNetQ.Consumer
             if(!this.queue.IsConsumerRepairable)
                 internalConsumer.Cancelled += consumer => Dispose();
 
-            internalConsumer.StartConsuming(
-                connection, 
+            var status = internalConsumer.StartConsuming(
+                connection,
                 queue,
-                onMessage, 
-                configuration
-                );
+                onMessage,
+                configuration);
+
+            if (status == StartConsumingStatus.Succeed)
+                eventBus.Publish(new StartConsumingSucceededEvent(this, queue));
+            else
+                eventBus.Publish(new StartConsumingFailedEvent(this, queue));
         }
 
         private void ConnectionOnDisconnected()
@@ -91,7 +95,7 @@ namespace EasyNetQ.Consumer
             StartConsumingInternal();
         }
 
-        private bool disposed = false;
+        private bool disposed;
 
         public void Dispose()
         {

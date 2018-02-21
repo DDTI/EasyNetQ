@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Text;
 using EasyNetQ.SystemMessages;
 using RabbitMQ.Client;
@@ -7,6 +8,7 @@ using RabbitMQ.Client.Exceptions;
 
 namespace EasyNetQ.Consumer
 {
+
     /// <summary>
     /// A strategy for dealing with failed messages. When a message consumer thows, HandleConsumerError is invoked.
     /// 
@@ -26,6 +28,8 @@ namespace EasyNetQ.Consumer
         private readonly IEasyNetQLogger logger;
         private readonly IConventions conventions;
         private readonly ITypeNameSerializer typeNameSerializer;
+        private readonly IErrorMessageSerializer errorMessageSerializer;
+
         private readonly object syncLock = new object();
 
         private IConnection connection;
@@ -37,7 +41,8 @@ namespace EasyNetQ.Consumer
             ISerializer serializer,
             IEasyNetQLogger logger,
             IConventions conventions, 
-            ITypeNameSerializer typeNameSerializer)
+            ITypeNameSerializer typeNameSerializer,
+            IErrorMessageSerializer errorMessageSerializer)
         {
             Preconditions.CheckNotNull(connectionFactory, "connectionFactory");
             Preconditions.CheckNotNull(serializer, "serializer");
@@ -50,6 +55,7 @@ namespace EasyNetQ.Consumer
             this.logger = logger;
             this.conventions = conventions;
             this.typeNameSerializer = typeNameSerializer;
+            this.errorMessageSerializer = errorMessageSerializer;
         }
 
         private void Connect()
@@ -58,7 +64,7 @@ namespace EasyNetQ.Consumer
             {
                 lock (syncLock)
                 {
-                    if (connection == null || !connection.IsOpen)
+                    if ((connection == null || !connection.IsOpen) && !(disposing || disposed))
                     {
                         if (connection != null)
                         {
@@ -87,6 +93,11 @@ namespace EasyNetQ.Consumer
                         }
 
                         connection = connectionFactory.CreateConnection();
+                        // A possible race condition exists during EasyNetQ IBus disposal where this instance's Dispose() method runs on another thread, while this thread is mid-executing connectionFactory.CreateConnection() (or a few lines earlier), and has not assigned the result to the connection variable before Dispose() accesses it.  This could result in the creation of a RabbitMQ.Client.IConnection instance which never gets disposed; that IConnection instance holds a thread open which can prevent application shutdown.  It was not desirable to lock (syncLock) within the Dispose() method to fix this; therefore, an additional check must be made here to dispose any such extra IConnection.
+                        if (disposing || disposed)
+                        {
+                            connection.Dispose();
+                        }
                     }
                 }
             }
@@ -130,6 +141,16 @@ namespace EasyNetQ.Consumer
             Preconditions.CheckNotNull(context, "context");
             Preconditions.CheckNotNull(exception, "exception");
 
+            if (disposed || disposing)
+            {
+                logger.ErrorWrite(
+                    "EasyNetQ Consumer Error Handler: DefaultConsumerErrorStrategy was already disposed, when attempting to handle consumer error.  This can occur when messaging is being shut down through disposal of the IBus.  Message will not be ackd to RabbitMQ server and will remain on the RabbitMQ queue.  Error message will not be published to error queue.\n" +
+                    "ConsumerTag: {0}, DeliveryTag: {1}\n",
+                    context.Info.ConsumerTag,
+                    context.Info.DeliverTag);
+                return AckStrategies.NackWithRequeue;
+            }
+
             try
             {
                 Connect();
@@ -140,7 +161,7 @@ namespace EasyNetQ.Consumer
 
                     var messageBody = CreateErrorMessage(context, exception);
                     var properties = model.CreateBasicProperties();
-                    properties.SetPersistent(true);
+                    properties.Persistent = true;
                     properties.Type = typeNameSerializer.Serialize(typeof (Error));
 
                     model.BasicPublish(errorExchange, context.Info.RoutingKey, properties, messageBody);
@@ -149,21 +170,19 @@ namespace EasyNetQ.Consumer
             catch (BrokerUnreachableException)
             {
                 // thrown if the broker is unreachable during initial creation.
-                logger.ErrorWrite("EasyNetQ Consumer Error Handler cannot connect to Broker\n" +
-                    CreateConnectionCheckMessage());
+                logger.ErrorWrite("EasyNetQ Consumer Error Handler cannot connect to Broker\n{0}", CreateConnectionCheckMessage());
             }
             catch (OperationInterruptedException interruptedException)
             {
                 // thrown if the broker connection is broken during declare or publish.
-                logger.ErrorWrite("EasyNetQ Consumer Error Handler: Broker connection was closed while attempting to publish Error message.\n" +
-                    string.Format("Message was: '{0}'\n", interruptedException.Message) +
-                    CreateConnectionCheckMessage());                
+                logger.ErrorWrite("EasyNetQ Consumer Error Handler: Broker connection was closed while attempting to publish Error message.\nException was: '{0}'\n{1}",
+                    interruptedException.Message,
+                    CreateConnectionCheckMessage());
             }
             catch (Exception unexpectedException)
             {
                 // Something else unexpected has gone wrong :(
-                logger.ErrorWrite("EasyNetQ Consumer Error Handler: Failed to publish error message\nException is:\n"
-                    + unexpectedException);
+                logger.ErrorWrite("EasyNetQ Consumer Error Handler: Failed to publish error message\nException is:\n{0}", unexpectedException);
             }
             return AckStrategies.Ack;
         }
@@ -175,16 +194,37 @@ namespace EasyNetQ.Consumer
 
         private byte[] CreateErrorMessage(ConsumerExecutionContext context, Exception exception)
         {
-            var messageAsString = Encoding.UTF8.GetString(context.Body);
+            var messageAsString = errorMessageSerializer.Serialize(context.Body);
             var error = new Error
             {
                 RoutingKey = context.Info.RoutingKey,
                 Exchange = context.Info.Exchange,
+                Queue = context.Info.Queue,
                 Exception = exception.ToString(),
                 Message = messageAsString,
-                DateTime = DateTime.UtcNow,
-                BasicProperties = context.Properties
+                DateTime = DateTime.UtcNow
             };
+
+            if (context.Properties.Headers == null)
+            {
+                error.BasicProperties = context.Properties;
+            }
+            else
+            {   
+                // we'll need to clone context.Properties as we are mutating the headers dictionary
+                error.BasicProperties = (MessageProperties)context.Properties.Clone();
+
+                // the RabbitMQClient implictly converts strings to byte[] on sending, but reads them back as byte[]
+                // we're making the assumption here that any byte[] values in the headers are strings
+                // and all others are basic types. RabbitMq client generally throws a nasty exception if you try
+                // to store anything other than basic types in headers anyway.
+
+                //see http://hg.rabbitmq.com/rabbitmq-dotnet-client/file/tip/projects/client/RabbitMQ.Client/src/client/impl/WireFormatting.cs
+
+                error.BasicProperties.Headers = context.Properties.Headers.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value is byte[] ? Encoding.UTF8.GetString((byte[])kvp.Value) : kvp.Value);
+            }
 
             return serializer.MessageToBytes(error);
         }
@@ -199,13 +239,15 @@ namespace EasyNetQ.Consumer
                 "Failed to write error message to error queue";
         }
 
-        private bool disposed = false;
+        private bool disposed;
+        private bool disposing;
 
         public virtual void Dispose()
         {
             if (disposed) return;
-
-            if(connection != null) connection.Dispose();
+            disposing = true;
+            
+            if (connection != null) { connection.Dispose(); }
 
             disposed = true;
         }

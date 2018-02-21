@@ -2,7 +2,6 @@
 
 namespace EasyNetQ
 {
-    [Serializable]
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = false)]
     public class DeliveryModeAttribute : Attribute
     {
@@ -11,6 +10,6 @@ namespace EasyNetQ
             IsPersistent = isPersistent;
         }
 
-        public bool IsPersistent { get; private set; }
+        public bool IsPersistent { get; }
     }
 }

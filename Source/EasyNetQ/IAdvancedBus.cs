@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using EasyNetQ.Consumer;
 using EasyNetQ.Topology;
@@ -13,6 +14,16 @@ namespace EasyNetQ
     /// </summary>
     public interface IAdvancedBus : IDisposable
     {
+        /// <summary>
+        /// Consume a stream of messages
+        /// </summary>
+        /// <typeparam name="T">The message type</typeparam>
+        /// <param name="queueConsumerPairs">Multiple queue - consumer pairs</param>
+        /// <param name="configure">
+        /// Fluent configuration e.g. x => x.WithPriority(10)</param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        IDisposable Consume(IEnumerable<QueueConsumerPair> queueConsumerPairs, Action<IConsumerConfiguration> configure);
+
         /// <summary>
         /// Consume a stream of messages
         /// </summary>
@@ -41,7 +52,6 @@ namespace EasyNetQ
         /// <param name="onMessage">The message handler</param>
         /// <returns>A disposable to cancel the consumer</returns>
         IDisposable Consume<T>(IQueue queue, Func<IMessage<T>, MessageReceivedInfo, Task> onMessage) where T : class;
-
 
         /// <summary>
         /// Consume a stream of messages asynchronously
@@ -72,13 +82,36 @@ namespace EasyNetQ
         /// <returns>A disposable to cancel the consumer</returns>
         IDisposable Consume(IQueue queue, Action<IHandlerRegistration> addHandlers, Action<IConsumerConfiguration> configure);
 
+        /// <summary>
+        /// Consume raw bytes from the queue.
+        /// </summary>
+        /// <param name="queue">The queue to subscribe to</param>
+        /// <param name="onMessage">
+        /// The message handler. Takes the message body, message properties and some information about the
+        /// receive context.
+        /// </param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        IDisposable Consume(IQueue queue, Action<byte[], MessageProperties, MessageReceivedInfo> onMessage);
 
         /// <summary>
         /// Consume raw bytes from the queue.
         /// </summary>
         /// <param name="queue">The queue to subscribe to</param>
         /// <param name="onMessage">
-        /// The message handler. Takes the message body, message properties and some information about the 
+        /// The message handler. Takes the message body, message properties and some information about the
+        /// receive context.
+        /// </param>
+        /// <param name="configure">
+        /// Fluent configuration e.g. x => x.WithPriority(10)</param>
+        /// <returns>A disposable to cancel the consumer</returns>
+        IDisposable Consume(IQueue queue, Action<byte[], MessageProperties, MessageReceivedInfo> onMessage, Action<IConsumerConfiguration> configure);
+
+        /// <summary>
+        /// Consume raw bytes from the queue.
+        /// </summary>
+        /// <param name="queue">The queue to subscribe to</param>
+        /// <param name="onMessage">
+        /// The message handler. Takes the message body, message properties and some information about the
         /// receive context. Returns a Task.
         /// </param>
         /// <returns>A disposable to cancel the consumer</returns>
@@ -89,7 +122,7 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="queue">The queue to subscribe to</param>
         /// <param name="onMessage">
-        /// The message handler. Takes the message body, message properties and some information about the 
+        /// The message handler. Takes the message body, message properties and some information about the
         /// receive context. Returns a Task.
         /// </param>
         /// <param name="configure">
@@ -102,17 +135,12 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="exchange">The exchange to publish to</param>
         /// <param name="routingKey">
-        /// The routing key for the message. The routing key is used for routing messages depending on the 
+        /// The routing key for the message. The routing key is used for routing messages depending on the
         /// exchange configuration.</param>
         /// <param name="mandatory">
-        /// This flag tells the server how to react if the message cannot be routed to a queue. 
-        /// If this flag is true, the server will return an unroutable message with a Return method. 
+        /// This flag tells the server how to react if the message cannot be routed to a queue.
+        /// If this flag is true, the server will return an unroutable message with a Return method.
         /// If this flag is false, the server silently drops the message.
-        /// </param>
-        /// <param name="immediate">
-        /// This flag tells the server how to react if the message cannot be routed to a queue consumer immediately. 
-        /// If this flag is true, the server will return an undeliverable message with a Return method. 
-        /// If this flag is false, the server will queue the message, but with no guarantee that it will ever be consumed.
         /// </param>
         /// <param name="messageProperties">The message properties</param>
         /// <param name="body">The message body</param>
@@ -120,7 +148,6 @@ namespace EasyNetQ
             IExchange exchange,
             string routingKey,
             bool mandatory,
-            bool immediate,
             MessageProperties messageProperties,
             byte[] body);
 
@@ -130,24 +157,18 @@ namespace EasyNetQ
         /// <typeparam name="T"></typeparam>
         /// <param name="exchange">The exchange to publish to</param>
         /// <param name="routingKey">
-        /// The routing key for the message. The routing key is used for routing messages depending on the 
+        /// The routing key for the message. The routing key is used for routing messages depending on the
         /// exchange configuration.</param>
         /// <param name="mandatory">
-        /// This flag tells the server how to react if the message cannot be routed to a queue. 
-        /// If this flag is true, the server will return an unroutable message with a Return method. 
+        /// This flag tells the server how to react if the message cannot be routed to a queue.
+        /// If this flag is true, the server will return an unroutable message with a Return method.
         /// If this flag is false, the server silently drops the message.
-        /// </param>
-        /// <param name="immediate">
-        /// This flag tells the server how to react if the message cannot be routed to a queue consumer immediately. 
-        /// If this flag is true, the server will return an undeliverable message with a Return method. 
-        /// If this flag is false, the server will queue the message, but with no guarantee that it will ever be consumed.
         /// </param>
         /// <param name="message">The message to publish</param>
         void Publish<T>(
-            IExchange exchange, 
+            IExchange exchange,
             string routingKey,
             bool mandatory,
-            bool immediate,
             IMessage<T> message) where T : class;
 
         /// <summary>
@@ -158,24 +179,18 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="exchange">The exchange to publish to</param>
         /// <param name="routingKey">
-        /// The routing key for the message. The routing key is used for routing messages depending on the 
+        /// The routing key for the message. The routing key is used for routing messages depending on the
         /// exchange configuration.</param>
         /// <param name="mandatory">
-        /// This flag tells the server how to react if the message cannot be routed to a queue. 
-        /// If this flag is true, the server will return an unroutable message with a Return method. 
+        /// This flag tells the server how to react if the message cannot be routed to a queue.
+        /// If this flag is true, the server will return an unroutable message with a Return method.
         /// If this flag is false, the server silently drops the message.
-        /// </param>
-        /// <param name="immediate">
-        /// This flag tells the server how to react if the message cannot be routed to a queue consumer immediately. 
-        /// If this flag is true, the server will return an undeliverable message with a Return method. 
-        /// If this flag is false, the server will queue the message, but with no guarantee that it will ever be consumed.
         /// </param>
         /// <param name="message">The message to publish</param>
         Task PublishAsync(
             IExchange exchange,
             string routingKey,
             bool mandatory,
-            bool immediate,
             IMessage message);
 
         /// <summary>
@@ -186,24 +201,18 @@ namespace EasyNetQ
         /// <typeparam name="T"></typeparam>
         /// <param name="exchange">The exchange to publish to</param>
         /// <param name="routingKey">
-        /// The routing key for the message. The routing key is used for routing messages depending on the 
+        /// The routing key for the message. The routing key is used for routing messages depending on the
         /// exchange configuration.</param>
         /// <param name="mandatory">
-        /// This flag tells the server how to react if the message cannot be routed to a queue. 
-        /// If this flag is true, the server will return an unroutable message with a Return method. 
+        /// This flag tells the server how to react if the message cannot be routed to a queue.
+        /// If this flag is true, the server will return an unroutable message with a Return method.
         /// If this flag is false, the server silently drops the message.
-        /// </param>
-        /// <param name="immediate">
-        /// This flag tells the server how to react if the message cannot be routed to a queue consumer immediately. 
-        /// If this flag is true, the server will return an undeliverable message with a Return method. 
-        /// If this flag is false, the server will queue the message, but with no guarantee that it will ever be consumed.
         /// </param>
         /// <param name="message">The message to publish</param>
         Task PublishAsync<T>(
             IExchange exchange,
             string routingKey,
             bool mandatory,
-            bool immediate,
             IMessage<T> message) where T : class;
 
         /// <summary>
@@ -213,17 +222,12 @@ namespace EasyNetQ
         /// </summary>
         /// <param name="exchange">The exchange to publish to</param>
         /// <param name="routingKey">
-        /// The routing key for the message. The routing key is used for routing messages depending on the 
+        /// The routing key for the message. The routing key is used for routing messages depending on the
         /// exchange configuration.</param>
         /// <param name="mandatory">
-        /// This flag tells the server how to react if the message cannot be routed to a queue. 
-        /// If this flag is true, the server will return an unroutable message with a Return method. 
+        /// This flag tells the server how to react if the message cannot be routed to a queue.
+        /// If this flag is true, the server will return an unroutable message with a Return method.
         /// If this flag is false, the server silently drops the message.
-        /// </param>
-        /// <param name="immediate">
-        /// This flag tells the server how to react if the message cannot be routed to a queue consumer immediately. 
-        /// If this flag is true, the server will return an undeliverable message with a Return method. 
-        /// If this flag is false, the server will queue the message, but with no guarantee that it will ever be consumed.
         /// </param>
         /// <param name="messageProperties">The message properties</param>
         /// <param name="body">The message body</param>
@@ -231,7 +235,6 @@ namespace EasyNetQ
             IExchange exchange,
             string routingKey,
             bool mandatory,
-            bool immediate,
             MessageProperties messageProperties,
             byte[] body);
 
@@ -254,15 +257,15 @@ namespace EasyNetQ
         /// The queue
         /// </returns>
         IQueue QueueDeclare(
-            string name, 
-            bool passive = false, 
-            bool durable = true, 
-            bool exclusive = false, 
+            string name,
+            bool passive = false,
+            bool durable = true,
+            bool exclusive = false,
             bool autoDelete = false,
-            int? perQueueMessageTtl  = null, 
+            int? perQueueMessageTtl  = null,
             int? expires = null,
             int? maxPriority = null,
-            string deadLetterExchange = null, 
+            string deadLetterExchange = null,
             string deadLetterRoutingKey = null,
             int? maxLength = null,
             int? maxLengthBytes = null,
@@ -285,15 +288,15 @@ namespace EasyNetQ
         /// <param name="maxLengthBytes">The maximum size of the queue in bytes.  Messages will be dropped or dead-lettered from the front of the queue to make room for new messages once the limit is reached</param>
         /// <returns>The queue</returns>
         Task<IQueue> QueueDeclareAsync(
-            string name, 
-            bool passive = false, 
-            bool durable = true, 
-            bool exclusive = false, 
+            string name,
+            bool passive = false,
+            bool durable = true,
+            bool exclusive = false,
             bool autoDelete = false,
             int? perQueueMessageTtl  = null,
             int? expires = null,
             int? maxPriority = null,
-            string deadLetterExchange = null, 
+            string deadLetterExchange = null,
             string deadLetterRoutingKey = null,
             int? maxLength = null,
             int? maxLengthBytes = null,
@@ -305,7 +308,7 @@ namespace EasyNetQ
         /// consumers.
         /// </summary>
         /// <returns>The queue</returns>
-        IQueue QueueDeclare(bool durable, bool exclusive, bool autodelete, bool consumerRepairable);
+   //     IQueue QueueDeclare(bool durable, bool exclusive, bool autodelete, bool consumerRepairable);
 
         /// <summary>
         /// Delete a queue
@@ -334,15 +337,15 @@ namespace EasyNetQ
         /// <param name="delayed">If set, declars x-delayed-type exchange for routing delayed messages.</param>
         /// <returns>The exchange</returns>
         IExchange ExchangeDeclare(
-            string name, 
-            string type, 
-            bool passive = false, 
-            bool durable = true, 
-            bool autoDelete = false, 
-            bool @internal = false, 
-            string alternateExchange = null, 
+            string name,
+            string type,
+            bool passive = false,
+            bool durable = true,
+            bool autoDelete = false,
+            bool @internal = false,
+            string alternateExchange = null,
             bool delayed = false);
-        
+
         /// <summary>
         /// Declare an exchange
         /// </summary>
@@ -356,13 +359,13 @@ namespace EasyNetQ
         /// <param name="delayed">If set, declars x-delayed-type exchange for routing delayed messages.</param>
         /// <returns>The exchange</returns>
         Task<IExchange> ExchangeDeclareAsync(
-            string name, 
-            string type, 
-            bool passive = false, 
-            bool durable = true, 
-            bool autoDelete = false, 
-            bool @internal = false, 
-            string alternateExchange = null, 
+            string name,
+            string type,
+            bool passive = false,
+            bool durable = true,
+            bool autoDelete = false,
+            bool @internal = false,
+            string alternateExchange = null,
             bool delayed = false);
 
         /// <summary>
@@ -387,8 +390,28 @@ namespace EasyNetQ
         /// <param name="exchange">The exchange to bind</param>
         /// <param name="queue">The queue to bind</param>
         /// <param name="routingKey">The routing key</param>
+        /// <param name="headers">The headers</param>
+        /// <returns>A binding</returns>
+        IBinding Bind(IExchange exchange, IQueue queue, string routingKey, IDictionary<string, object> headers);
+
+        /// <summary>
+        /// Bind an exchange to a queue. Does nothing if the binding already exists.
+        /// </summary>
+        /// <param name="exchange">The exchange to bind</param>
+        /// <param name="queue">The queue to bind</param>
+        /// <param name="routingKey">The routing key</param>
         /// <returns>A binding</returns>
         Task<IBinding> BindAsync(IExchange exchange, IQueue queue, string routingKey);
+
+        /// <summary>
+        /// Bind an exchange to a queue. Does nothing if the binding already exists.
+        /// </summary>
+        /// <param name="exchange">The exchange to bind</param>
+        /// <param name="queue">The queue to bind</param>
+        /// <param name="routingKey">The routing key</param>
+        /// <param name="headers">The headers</param>
+        /// <returns>A binding</returns>
+        Task<IBinding> BindAsync(IExchange exchange, IQueue queue, string routingKey, IDictionary<string, object> headers);
 
         /// <summary>
         /// Bind two exchanges. Does nothing if the binding already exists.
@@ -405,8 +428,28 @@ namespace EasyNetQ
         /// <param name="source">The source exchange</param>
         /// <param name="destination">The destination exchange</param>
         /// <param name="routingKey">The routing key</param>
+        /// <param name="headers">The headers</param>
+        /// <returns>A binding</returns>
+        IBinding Bind(IExchange source, IExchange destination, string routingKey, IDictionary<string, object> headers);
+
+        /// <summary>
+        /// Bind two exchanges. Does nothing if the binding already exists.
+        /// </summary>
+        /// <param name="source">The source exchange</param>
+        /// <param name="destination">The destination exchange</param>
+        /// <param name="routingKey">The routing key</param>
         /// <returns>A binding</returns>
         Task<IBinding> BindAsync(IExchange source, IExchange destination, string routingKey);
+
+        /// <summary>
+        /// Bind two exchanges. Does nothing if the binding already exists.
+        /// </summary>
+        /// <param name="source">The source exchange</param>
+        /// <param name="destination">The destination exchange</param>
+        /// <param name="routingKey">The routing key</param>
+        /// <param name="headers">The headers</param>
+        /// <returns>A binding</returns>
+        Task<IBinding> BindAsync(IExchange source, IExchange destination, string routingKey, IDictionary<string, object> headers);
 
         /// <summary>
         /// Delete a binding

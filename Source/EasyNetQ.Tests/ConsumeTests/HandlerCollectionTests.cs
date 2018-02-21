@@ -1,14 +1,11 @@
 ﻿// ReSharper disable InconsistentNaming
 
-using System;
-using System.Threading.Tasks;
 using EasyNetQ.Consumer;
 using EasyNetQ.Loggers;
-using NUnit.Framework;
+using Xunit;
 
 namespace EasyNetQ.Tests.ConsumeTests
 {
-    [TestFixture]
     public class HandlerCollectionTests
     {
         private IHandlerCollection handlerCollection;
@@ -16,8 +13,7 @@ namespace EasyNetQ.Tests.ConsumeTests
         private bool myMessageHandlerExecuted = false;
         private bool animalHandlerExecuted = false;
 
-        [SetUp]
-        public void SetUp()
+        public HandlerCollectionTests()
         {
             handlerCollection = new HandlerCollection(new NullLogger());
 
@@ -31,7 +27,7 @@ namespace EasyNetQ.Tests.ConsumeTests
                 });
         }
 
-        [Test]
+        [Fact]
         public void Should_return_matching_handler()
         {
             var handler = handlerCollection.GetHandler<MyMessage>();
@@ -40,7 +36,7 @@ namespace EasyNetQ.Tests.ConsumeTests
             myMessageHandlerExecuted.ShouldBeTrue();
         }
 
-        [Test]
+        [Fact]
         public void Should_return_supertype_handler()
         {
             var handler = handlerCollection.GetHandler<Dog>();
@@ -49,14 +45,16 @@ namespace EasyNetQ.Tests.ConsumeTests
             animalHandlerExecuted.ShouldBeTrue();
         }
 
-        [Test]
-        [ExpectedException(typeof(EasyNetQException))]
+        [Fact]
         public void Should_throw_if_handler_is_not_found()
         {
-            handlerCollection.GetHandler<MyOtherMessage>();
+            Assert.Throws<EasyNetQException>(() =>
+            {
+                handlerCollection.GetHandler<MyOtherMessage>();
+            });
         }
 
-        [Test]
+        [Fact]
         public void Should_return_matching_handler_by_type()
         {
             var handler = handlerCollection.GetHandler(typeof(MyMessage));
@@ -65,7 +63,7 @@ namespace EasyNetQ.Tests.ConsumeTests
             myMessageHandlerExecuted.ShouldBeTrue();
         }
 
-        [Test]
+        [Fact]
         public void Should_return_supertype_handler_by_type()
         {
             var handler = handlerCollection.GetHandler(typeof(Dog));
@@ -74,7 +72,7 @@ namespace EasyNetQ.Tests.ConsumeTests
             animalHandlerExecuted.ShouldBeTrue();
         }
 
-        [Test]
+        [Fact]
         public void Should_return_a_null_logger_if_ThrowOnNoMatchingHandler_is_false()
         {
             handlerCollection.ThrowOnNoMatchingHandler = false;
@@ -85,20 +83,13 @@ namespace EasyNetQ.Tests.ConsumeTests
             animalHandlerExecuted.ShouldBeFalse();
         }
 
-        [Test]
-        [ExpectedException(typeof(EasyNetQException))]
+        [Fact]
         public void Should_not_be_able_to_register_multiple_handlers_for_the_same_type()
         {
-            handlerCollection.Add<MyMessage>((message, info) => { });
-        }
-
-        public Task TaskSynchronous(Action action)
-        {
-            var tcs = new TaskCompletionSource<object>();
-
-            action();
-            tcs.SetResult(new object());
-            return tcs.Task;
+            Assert.Throws<EasyNetQException>(() =>
+            {
+                handlerCollection.Add<MyMessage>((message, info) => { });
+            });
         }
     }
 }

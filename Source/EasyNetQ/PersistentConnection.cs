@@ -26,13 +26,11 @@ namespace EasyNetQ
     /// </summary>
     public class PersistentConnection : IPersistentConnection
     {
-        private const int connectAttemptIntervalMilliseconds = 5000;
-
         private readonly IConnectionFactory connectionFactory;
         private readonly IEasyNetQLogger logger;
         private readonly IEventBus eventBus;
         private readonly object locker = new object();
-        private bool initialized = false;
+        private bool initialized;
         private IConnection connection;
 		public IConnection Connection
 		{
@@ -72,21 +70,24 @@ namespace EasyNetQ
 
             return connection.CreateModel();
         }
-
-        public bool IsConnected
-        {
-            get { return connection != null && connection.IsOpen && !disposed; }
-        }
+        
+        public bool IsConnected => connection != null && connection.IsOpen && !disposed;
 
         void StartTryToConnect()
         {
-            var timer = new Timer(TryToConnect);
-            timer.Change(connectAttemptIntervalMilliseconds, Timeout.Infinite);
+            Timer timer = null;
+#if !NETFX
+            timer = new Timer(delegate { TryToConnect(timer); }, 
+                null, connectionFactory.Configuration.ConnectIntervalAttempt, Timeout.InfiniteTimeSpan);
+#else
+            timer = new Timer(TryToConnect);
+            timer.Change(connectionFactory.Configuration.ConnectIntervalAttempt, Timeout.InfiniteTimeSpan);
+#endif
         }
 
         void TryToConnect(object timer)
         {
-            if(timer != null) ((Timer) timer).Dispose();
+            ((Timer) timer)?.Dispose();
 
             logger.DebugWrite("Trying to connect");
             if (disposed) return;
@@ -96,8 +97,15 @@ namespace EasyNetQ
             {
                 try
                 {
-                    connection = connectionFactory.CreateConnection();
+                    connection = connectionFactory.CreateConnection(); // A possible dispose race condition exists, whereby the Dispose() method may run while this loop is waiting on connectionFactory.CreateConnection() returning a connection.  In that case, a connection could be created and assigned to the connection variable, without it ever being later disposed, leading to app hang on shutdown.  The following if clause guards against this condition and ensures such connections are always disposed.
+                    if (disposed)
+                    {
+                        connection.Dispose();
+                        break;
+                    }
+
                     connectionFactory.Success();
+                    
                 }
                 catch (SocketException socketException)
                 {
@@ -107,7 +115,7 @@ namespace EasyNetQ
                 {
                     LogException(brokerUnreachableException);
                 }
-            } while (connectionFactory.Next());
+            } while (!disposed && connectionFactory.Next());
 
             if (connectionFactory.Succeeded)
             {
@@ -123,20 +131,30 @@ namespace EasyNetQ
             }
             else
             {
-                logger.ErrorWrite("Failed to connect to any Broker. Retrying in {0} ms\n", 
-                    connectAttemptIntervalMilliseconds);
-                StartTryToConnect();
+                if (!disposed)
+                {
+                    logger.ErrorWrite("Failed to connect to any Broker. Retrying in {0}",
+                        connectionFactory.Configuration.ConnectIntervalAttempt);
+                    StartTryToConnect();
+                }
             }
         }
 
         void LogException(Exception exception)
         {
+            var exceptionMessage = exception.Message;
+            // if there is an inner exception, surface its message since it has more detailed information on why connection failed
+            if (exception.InnerException != null)
+            {
+                exceptionMessage = $"{exceptionMessage} ({exception.InnerException.Message})";
+            }
+
             logger.ErrorWrite("Failed to connect to Broker: '{0}', Port: {1} VHost: '{2}'. " +
                     "ExceptionMessage: '{3}'",
                 connectionFactory.CurrentHost.Host,
                 connectionFactory.CurrentHost.Port,
                 connectionFactory.Configuration.VirtualHost,
-                exception.Message);
+                exceptionMessage);
         }
 
         void OnConnectionShutdown(object sender, ShutdownEventArgs e)
@@ -175,7 +193,7 @@ namespace EasyNetQ
             eventBus.Publish(new ConnectionDisconnectedEvent());
         }
 
-        private bool disposed = false;
+        private bool disposed;
         public void Dispose()
         {
             if (disposed) return;

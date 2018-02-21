@@ -1,24 +1,24 @@
 ﻿// ReSharper disable InconsistentNaming
 
-using NUnit.Framework;
+using EasyNetQ.Consumer;
+using EasyNetQ.Tests;
+using Xunit;
 
 namespace EasyNetQ.Hosepipe.Tests
 {
-    [TestFixture]
     public class QueueInsertionTests
     {
         private IQueueInsertion queueInsertion;
 
-        [SetUp]
-        public void SetUp()
+        public QueueInsertionTests()
         {
-            queueInsertion = new QueueInsertion();
+            queueInsertion = new QueueInsertion(new DefaultErrorMessageSerializer());
         }
 
         /// <summary>
         /// Create a RabbitMQ queue 'Hosepipe_test_queue' before attempting this test.
         /// </summary>
-        [Test, Explicit("Needs a RabbitMQ server on localhost")]
+        [Fact][Explicit("Needs a RabbitMQ server on localhost")]
         public void Should_be_able_to_inset_messages_onto_a_queue()
         {
             var messages = new[]

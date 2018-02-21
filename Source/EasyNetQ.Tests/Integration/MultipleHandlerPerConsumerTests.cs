@@ -3,29 +3,26 @@
 using System;
 using System.Threading;
 using EasyNetQ.Topology;
-using NUnit.Framework;
+using Xunit;
 
 namespace EasyNetQ.Tests.Integration
 {
-    [TestFixture]
     [Explicit("Required a RabbitMQ instance on localhost")]
-    public class MultipleHandlerPerConsumerTests
+    public class MultipleHandlerPerConsumerTests : IDisposable
     {
         private IBus bus;
 
-        [SetUp]
-        public void SetUp()
+        public MultipleHandlerPerConsumerTests()
         {
             bus = RabbitHutch.CreateBus("host=localhost");
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             bus.Dispose();
         }
 
-        [Test]
+        [Fact]
         public void Should_cosume_multiple_message_types()
         {
             var countdownEvent = new CountdownEvent(3);
@@ -50,12 +47,9 @@ namespace EasyNetQ.Tests.Integration
                         })
                 );
 
-            bus.Advanced.Publish(Exchange.GetDefault(), queue.Name, false, false, 
-                new Message<MyMessage>(new MyMessage { Text = "Hello" }));
-            bus.Advanced.Publish(Exchange.GetDefault(), queue.Name, false, false, 
-                new Message<MyOtherMessage>(new MyOtherMessage { Text = "Hi" }));
-            bus.Advanced.Publish(Exchange.GetDefault(), queue.Name, false, false, 
-                new Message<Dog>(new Dog()));
+            bus.Advanced.Publish(Exchange.GetDefault(), queue.Name, false, new Message<MyMessage>(new MyMessage { Text = "Hello" }));
+            bus.Advanced.Publish(Exchange.GetDefault(), queue.Name, false, new Message<MyOtherMessage>(new MyOtherMessage { Text = "Hi" }));
+            bus.Advanced.Publish(Exchange.GetDefault(), queue.Name, false, new Message<Dog>(new Dog()));
 
             countdownEvent.Wait(1000);
         }

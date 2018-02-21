@@ -23,7 +23,7 @@ namespace EasyNetQ.AutoSubscribe
         /// <summary>
         /// Used when generating the unique SubscriptionId checksum.
         /// </summary>
-        public string SubscriptionIdPrefix { get; private set; }
+        public string SubscriptionIdPrefix { get; }
 
         /// <summary>
         /// Responsible for consuming a message with the relevant message consumer.
@@ -146,7 +146,14 @@ namespace EasyNetQ.AutoSubscribe
                                                            .GetMethod(dispatchName, BindingFlags.Instance | BindingFlags.Public)
                                                            .MakeGenericMethod(subscriptionInfo.MessageType, subscriptionInfo.ConcreteType);
 
+#if !NETFX
+                    var dispatchDelegate = dispatchMethod.CreateDelegate(
+                        subscriberTypeFromMessageTypeDelegate(subscriptionInfo.MessageType),
+                        AutoSubscriberMessageDispatcher);
+#else
                     var dispatchDelegate = Delegate.CreateDelegate(subscriberTypeFromMessageTypeDelegate(subscriptionInfo.MessageType), AutoSubscriberMessageDispatcher, dispatchMethod);
+#endif
+
                     var subscriptionAttribute = GetSubscriptionAttribute(subscriptionInfo);
                     var subscriptionId = subscriptionAttribute != null ? subscriptionAttribute.SubscriptionId : GenerateSubscriptionId(subscriptionInfo);
                     var busSubscribeMethod = genericBusSubscribeMethod.MakeGenericMethod(subscriptionInfo.MessageType);
@@ -191,7 +198,7 @@ namespace EasyNetQ.AutoSubscribe
         private IEnumerable<string> GetTopAttributeValues(AutoSubscriberConsumerInfo subscriptionInfo)
         {
             var consumeMethod = ConsumeMethod(subscriptionInfo);
-            object[] customAttributes = consumeMethod.GetCustomAttributes(typeof(ForTopicAttribute), true);
+            object[] customAttributes = consumeMethod.GetCustomAttributes(typeof(ForTopicAttribute), true).Cast<object>().ToArray();
             return customAttributes
                              .OfType<ForTopicAttribute>()
                              .Select(a => a.Topic);
@@ -208,22 +215,23 @@ namespace EasyNetQ.AutoSubscribe
                 {
                     //prefetch count is set to a configurable default in RabbitAdvancedBus
                     //so don't touch it unless SubscriptionConfigurationAttribute value is other than 0.
-                    if(configSettings.PrefetchCount > 0)
-                    {
+                    if (configSettings.PrefetchCount > 0)
                         configuration.WithPrefetchCount(configSettings.PrefetchCount);
-                    }
-                    configuration.WithAutoDelete(configSettings.AutoDelete)
-                                 .WithCancelOnHaFailover(configSettings.CancelOnHaFailover)
-                                 .WithExpires(configSettings.Expires)
-                                 .WithPrefetchCount(configSettings.PrefetchCount)
-                                 .WithPriority(configSettings.Priority);
+
+                    if (configSettings.Expires > 0 )
+                        configuration.WithExpires(configSettings.Expires);
+
+                    configuration
+                        .WithAutoDelete(configSettings.AutoDelete)
+                        .WithCancelOnHaFailover(configSettings.CancelOnHaFailover)
+                        .WithPriority(configSettings.Priority);
                 };
         }
 
         private SubscriptionConfigurationAttribute GetSubscriptionConfigurationAttributeValue(AutoSubscriberConsumerInfo subscriptionInfo)
         {
             var consumeMethod = ConsumeMethod(subscriptionInfo);
-            object[] customAttributes = consumeMethod.GetCustomAttributes(typeof(SubscriptionConfigurationAttribute), true);
+            object[] customAttributes = consumeMethod.GetCustomAttributes(typeof(SubscriptionConfigurationAttribute), true).Cast<object>().ToArray();
             return customAttributes
                              .OfType<SubscriptionConfigurationAttribute>()
                              .FirstOrDefault();
@@ -231,7 +239,7 @@ namespace EasyNetQ.AutoSubscribe
 
         protected virtual bool IsValidMarkerType(Type markerType)
         {
-            return markerType.IsInterface && markerType.GetMethods().Any(m => m.Name == ConsumeMethodName);
+            return markerType.GetTypeInfo().IsInterface && markerType.GetMethods().Any(m => m.Name == ConsumeMethodName);
         }
 
         protected virtual MethodInfo GetSubscribeMethodOfBus(string methodName, Type parmType)
@@ -267,16 +275,17 @@ namespace EasyNetQ.AutoSubscribe
 
         protected virtual IEnumerable<KeyValuePair<Type, AutoSubscriberConsumerInfo[]>> GetSubscriptionInfos(IEnumerable<Type> types,Type interfaceType)
         {
-            foreach (var concreteType in types.Where(t => t.IsClass && !t.IsAbstract))
+            foreach (var concreteType in types.Where(t => t.GetTypeInfo().IsClass && !t.GetTypeInfo().IsAbstract))
             {
                 var subscriptionInfos = concreteType.GetInterfaces()
-                    .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == interfaceType && !i.GetGenericArguments()[0].IsGenericParameter)
+                    .Where(i => i.GetTypeInfo().IsGenericType && i.GetGenericTypeDefinition() == interfaceType && !i.GetGenericArguments()[0].IsGenericParameter)
                     .Select(i => new AutoSubscriberConsumerInfo(concreteType, i, i.GetGenericArguments()[0]))
                     .ToArray();
 
                 if (subscriptionInfos.Any())
                     yield return new KeyValuePair<Type, AutoSubscriberConsumerInfo[]>(concreteType, subscriptionInfos);
             }
+
         }
 
        
