@@ -95,7 +95,8 @@
         <MakeDir Directories="$(NuGetPackageDirectory)" Condition="!Exists('$(NuGetPackageDirectory)')" />
         <Delete Files="@(FilesToDelete)" />
         <MSBuild Projects="@(ClientLibraries)" Targets="Pack" Properties="Configuration=$(Configuration);PackageOutputPath=$(NuGetPackageDirectory)" />
-    </Target>
+  
+  
     <Delete Files="@(FilesToDelete)" />
 
     <Copy SourceFiles="$(OutputDir)\EasyNetQ.DI.Autofac.dll" DestinationFolder="$(Package)\EasyNetQ.DI.Autofac\lib\net40" />
@@ -118,4 +119,6 @@
 
     <Exec WorkingDirectory="$(Package)\EasyNetQ.DI.Autofac" Command="$(NuGet)\NuGet.exe pack $(Package)\EasyNetQ.DI.Autofac\EasyNetQ.DI.Autofac.nuspec" />
 
+ </Target>
+  
 </Project>
