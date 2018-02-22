@@ -7,6 +7,7 @@ using System.Reflection;
 // MINOR version when you add functionality in a backwards-compatible manner, and
 // PATCH version when you make backwards-compatible bug fixes.
 
+[assembly: AssemblyVersion("1.1.4.0")]
 [assembly: CLSCompliant(false)]
 
 // 1.1.4.0 Add support for connection_name in connection configuration and possibility to specify connection properties during setup
