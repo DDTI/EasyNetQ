@@ -118,6 +118,4 @@
 
     <Exec WorkingDirectory="$(Package)\EasyNetQ.DI.Autofac" Command="$(NuGet)\NuGet.exe pack $(Package)\EasyNetQ.DI.Autofac\EasyNetQ.DI.Autofac.nuspec" />
 
-  </Target>
-
 </Project>
