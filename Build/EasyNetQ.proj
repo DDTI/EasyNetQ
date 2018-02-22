@@ -18,8 +18,8 @@
         * https://github.com/Microsoft/msbuild/issues/1697
     -->
     <PropertyGroup>
-        <BuildNumber>$(BUILD_BUILDID)</BuildNumber>
-        <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
+        <!--<BuildNumber>$(BUILD_BUILDID)</BuildNumber>
+        <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>-->
         <BaseDir>$(MSBuildProjectDirectory)\..</BaseDir>
         <OutputDir>$(BaseDir)\bin</OutputDir>
         <Tools>$(BaseDir)\Tools</Tools>
@@ -97,7 +97,7 @@
         <MSBuild Projects="@(ClientLibraries)" Targets="Pack" Properties="Configuration=$(Configuration);PackageOutputPath=$(NuGetPackageDirectory)" />
   
   
-    <Delete Files="@(FilesToDelete)" />
+    <!--<Delete Files="@(FilesToDelete)" />
 
     <Copy SourceFiles="$(OutputDir)\EasyNetQ.DI.Autofac.dll" DestinationFolder="$(Package)\EasyNetQ.DI.Autofac\lib\net40" />
 
@@ -117,7 +117,7 @@
         XPath="/package/metadata/dependencies/dependency[@id='EasyNetQ']/@version"
         Value="%(AsmInfo.Version)" />
 
-    <Exec WorkingDirectory="$(Package)\EasyNetQ.DI.Autofac" Command="$(NuGet)\NuGet.exe pack $(Package)\EasyNetQ.DI.Autofac\EasyNetQ.DI.Autofac.nuspec" />
+    <Exec WorkingDirectory="$(Package)\EasyNetQ.DI.Autofac" Command="$(NuGet)\NuGet.exe pack $(Package)\EasyNetQ.DI.Autofac\EasyNetQ.DI.Autofac.nuspec" />-->
 
  </Target>
   
