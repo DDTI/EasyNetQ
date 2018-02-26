@@ -40,7 +40,7 @@
 
     <Import Project="$(MSBuildCommunityTasksPath)\MSBuild.Community.Tasks.Targets"/>
 
-    <Target Name="Default" DependsOnTargets="Version; Build; Test; Package" />
+    <Target Name="Default" DependsOnTargets="Version; Build; Package" />
 
     <Target Name="Version">
         <FileUpdate Files="$(Source)\Version.cs"
@@ -65,22 +65,10 @@
     </Target>
     <!-- Test all projects against their targeted frameworks. Only tests that
         are not Integration or Explicit tests. -->
-    <Target Name="Test" DependsOnTargets="Build">
-        <ItemGroup>
-            <TestProjects Include="$(Source)\EasyNetQ.Tests\EasyNetQ.Tests.csproj" />
-            <TestProjects Include="$(Source)\EasyNetQ.DI.Tests\EasyNetQ.DI.Tests.csproj" />
-            <TestProjects Include="$(Source)\EasyNetQ.Hosepipe.Tests\EasyNetQ.Hosepipe.Tests.csproj" />
-            <TestProjects Include="$(Source)\EasyNetQ.Scheduler.Tests\EasyNetQ.Scheduler.Tests.csproj" />
-            <TestProjects Include="$(Source)\EasyNetQ.Scheduler.Mongo.Tests\EasyNetQ.Scheduler.Mongo.Tests.csproj" />
-        </ItemGroup>
-
-        <Exec WorkingDirectory="%(TestProjects.RootDir)\%(TestProjects.Directory)"
-              Command='dotnet test --configuration $(Configuration) --no-build --filter "Category!=Explicit&#038;Category!=Integration"'
-              ContinueOnError="ErrorAndContinue" />
-    </Target>
+    
 
     <!-- Packaging -->
-    <Target Name="Package" DependsOnTargets="Test">
+    <Target Name="Package" DependsOnTargets="Build">
         <PropertyGroup>
             <NuGetPackageDirectory>$(Package)</NuGetPackageDirectory>
         </PropertyGroup>
