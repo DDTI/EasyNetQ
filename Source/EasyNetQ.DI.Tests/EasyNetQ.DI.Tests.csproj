@@ -35,7 +35,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.3.0-preview-20170601-03" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.3.0-beta3-build3705" />
     <PackageReference Include="LightInject" Version="4.0.11" />
-    <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="NSubstitute" Version="2.0.3" />
     <PackageReference Include="xunit" Version="2.3.0-beta3-build3705" />
     <PackageReference Include="RabbitMQ.Client" Version="5.0.1" />
