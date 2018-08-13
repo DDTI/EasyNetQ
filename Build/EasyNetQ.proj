@@ -18,17 +18,13 @@
         * https://github.com/Microsoft/msbuild/issues/1697
     -->
     <PropertyGroup>
-        <!--<BuildNumber>$(BUILD_BUILDID)</BuildNumber>
-        <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>-->
+        <BuildNumber>$(BUILD_BUILDID)</BuildNumber>
         <BaseDir>$(MSBuildProjectDirectory)\..</BaseDir>
         <OutputDir>$(BaseDir)\bin</OutputDir>
         <Tools>$(BaseDir)\Tools</Tools>
         <MSBuildCommunityTasksPath>$(Tools)\MSBuildCommunityTasks</MSBuildCommunityTasksPath>
         <Package>$(BaseDir)\Package</Package>
         <Source>$(BaseDir)\Source</Source>
-        <BuildNumber Condition=" '$(APPVEYOR_BUILD_NUMBER)' != '' ">$(APPVEYOR_BUILD_NUMBER)</BuildNumber>
-        <BuildNumber Condition=" '$(BUILD_NUMBER)' != '' ">$(BUILD_NUMBER)</BuildNumber>
-        <BuildNumber Condition=" '$(BuildNumber)' == '' ">0</BuildNumber>
     </PropertyGroup>
 
     <!-- Properties that are set during build to find test/merge binaries -->
