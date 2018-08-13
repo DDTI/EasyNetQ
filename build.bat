@@ -32,6 +32,6 @@ if not defined DevEnvDir (
     exit /b 1
 )
 
-msbuild %ScriptRoot%\Build\EasyNetQ.proj
+msbuild "%ScriptRoot%\Build\EasyNetQ.proj"
 
 pause
